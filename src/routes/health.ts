@@ -16,10 +16,15 @@ const router = Router();
  *  - 200  →  status "ok",   db "connected"
  *  - 503  →  status "degraded", db "disconnected"
  */
+import { getRedisClient } from '../queue/redisClient';
+import { getBullQueue } from '../queue/bullQueue';
+
 router.get(
   '/',
   asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     let dbConnected = false;
+    let redisConnected = false;
+    let queueDepth = 0;
 
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -28,10 +33,34 @@ router.get(
       // DB is unreachable — handled below
     }
 
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        const pingResponse = await redis.ping();
+        if (pingResponse === 'PONG') {
+          redisConnected = true;
+        }
+      } catch {
+        // Redis ping failed
+      }
+    }
+
+    const bullQueue = getBullQueue();
+    if (bullQueue) {
+      try {
+        queueDepth = await bullQueue.getWaitingCount();
+      } catch {
+        // Queue error
+      }
+    }
+
     const healthData: HealthData = {
       status: dbConnected ? 'ok' : 'degraded',
       db: dbConnected ? 'connected' : 'disconnected',
-      uptime: process.uptime(),
+      redis: redisConnected ? 'connected' : 'disconnected',
+      queue: bullQueue ? 'bullmq' : 'memory',
+      queueDepth,
+      uptime: Number(process.uptime().toFixed(1)),
       timestamp: new Date().toISOString(),
     };
 

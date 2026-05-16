@@ -90,6 +90,9 @@ export interface JobResultData {
 export interface HealthData {
   status: 'ok' | 'degraded';
   db: 'connected' | 'disconnected';
+  redis: 'connected' | 'disconnected';
+  queue: 'bullmq' | 'memory';
+  queueDepth: number;
   uptime: number;
   timestamp: string;
 }
