@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import type { CheckResult } from '../types';
+import { AppError } from '../../utils/AppError';
 
 const TOO_DARK = 40;
 const TOO_BRIGHT = 220;
@@ -12,7 +13,13 @@ const TOO_BRIGHT = 220;
  * Confidence is 1.0 within the acceptable range and linearly interpolated outside it.
  */
 export async function checkBrightness(imagePath: string): Promise<CheckResult> {
-  const stats = await sharp(imagePath).stats();
+  let stats: sharp.Stats;
+  try {
+    stats = await sharp(imagePath).stats();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AppError('Image processing failed: ' + msg, 422);
+  }
   const ch = stats.channels;
 
   let r: number;

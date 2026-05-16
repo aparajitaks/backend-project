@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import type { CheckResult } from '../types';
+import { AppError } from '../../utils/AppError';
 
 const THRESHOLD = 80;
 
@@ -11,10 +12,19 @@ const THRESHOLD = 80;
  * Threshold: 80. Confidence = Math.min(variance / 200, 1).
  */
 export async function checkBlur(imagePath: string): Promise<CheckResult> {
-  const { data, info } = await sharp(imagePath)
-    .greyscale()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  let data: Buffer;
+  let info: sharp.OutputInfo;
+  try {
+    const result = await sharp(imagePath)
+      .greyscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    data = result.data;
+    info = result.info;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AppError('Image processing failed: ' + msg, 422);
+  }
 
   const { width, height } = info;
 

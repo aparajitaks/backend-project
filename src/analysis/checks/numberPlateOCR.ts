@@ -2,12 +2,29 @@ import sharp from 'sharp';
 import Tesseract from 'tesseract.js';
 import { env } from '../../config/env';
 import type { CheckResult } from '../types';
+import { AppError } from '../../utils/AppError';
 
 /**
  * UK-style number plate pattern: 2 letters, 1-2 digits, 1-2 letters, 4 digits.
  * e.g. AB12CD3456 — adjust as needed for your locale.
  */
 const NUMBER_PLATE_REGEX = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$/;
+
+let workerPromise: Promise<Tesseract.Worker> | null = null;
+
+async function getWorker(): Promise<Tesseract.Worker> {
+  if (!workerPromise) {
+    workerPromise = (async () => {
+      const worker = await Tesseract.createWorker('eng');
+      await worker.setParameters({
+        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+      });
+      return worker;
+    })();
+  }
+  return workerPromise;
+}
 
 /**
  * Crops the centre 60% of the image and runs Tesseract OCR (PSM 7 — single line)
@@ -21,19 +38,27 @@ const NUMBER_PLATE_REGEX = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$/;
  */
 export async function checkNumberPlate(imagePath: string): Promise<CheckResult> {
   // ── 1. Crop centre 60% ────────────────────────────────────────────────────
-  const metadata = await sharp(imagePath).metadata();
-  const fullWidth  = metadata.width  ?? 0;
-  const fullHeight = metadata.height ?? 0;
+  let metadata: sharp.Metadata;
+  let croppedBuffer: Buffer;
 
-  const cropLeft   = Math.floor(fullWidth  * 0.2);
-  const cropTop    = Math.floor(fullHeight * 0.2);
-  const cropWidth  = Math.floor(fullWidth  * 0.6);
-  const cropHeight = Math.floor(fullHeight * 0.6);
+  try {
+    metadata = await sharp(imagePath).metadata();
+    const fullWidth  = metadata.width  ?? 0;
+    const fullHeight = metadata.height ?? 0;
 
-  const croppedBuffer = await sharp(imagePath)
-    .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
-    .png()
-    .toBuffer();
+    const cropLeft   = Math.floor(fullWidth  * 0.2);
+    const cropTop    = Math.floor(fullHeight * 0.2);
+    const cropWidth  = Math.floor(fullWidth  * 0.6);
+    const cropHeight = Math.floor(fullHeight * 0.6);
+
+    croppedBuffer = await sharp(imagePath)
+      .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
+      .png()
+      .toBuffer();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AppError('Image processing failed: ' + msg, 422);
+  }
 
   // ── 2. OCR with timeout ───────────────────────────────────────────────────
   const timeoutMs = env.OCR_TIMEOUT_MS;
@@ -43,17 +68,13 @@ export async function checkNumberPlate(imagePath: string): Promise<CheckResult> 
     | { timedOut: false; text: string };
 
   const ocrPromise: Promise<OcrOutcome> = (async (): Promise<OcrOutcome> => {
-    const worker = await Tesseract.createWorker('eng');
     try {
-      await worker.setParameters({
-        // PSM 7 — treat image as a single text line
-        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      });
+      const worker = await getWorker();
       const { data } = await worker.recognize(croppedBuffer);
       return { timedOut: false, text: data.text.trim().replace(/\s+/g, '') };
-    } finally {
-      await worker.terminate();
+    } catch {
+      // If Tesseract fails, we consider it a timeout/failure rather than breaking the pipeline
+      return { timedOut: true };
     }
   })();
 

@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import type { CheckResult } from '../types';
+import { AppError } from '../../utils/AppError';
 
 const BORDER_PX = 10;
 const SCREENSHOT_SOFTWARE = ['snip', 'screenshot', 'grab'];
@@ -59,8 +60,9 @@ export async function checkScreenshot(imagePath: string): Promise<CheckResult> {
         firedHeuristics.push(`H1: uniform border (std-dev=${stdDev.toFixed(2)})`);
       }
     }
-  } catch {
-    // Non-fatal — skip heuristic
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AppError('Image processing failed: ' + msg, 422);
   }
 
   // ── H2 & H3: EXIF parsing (dynamic import for ESM-only exifr) ────────────
