@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import createError from 'http-errors';
 import { processUpload } from '../services/uploadService';
+import { enqueueJob } from '../queue/index';
 import type { ApiResponse, UploadSuccessData } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -18,10 +19,7 @@ const uploadFileSchema = z.object({
     .number()
     .int()
     .positive('File size must be a positive integer.')
-    .max(
-      10 * 1024 * 1024,
-      'File size must not exceed the configured maximum.',
-    ),
+    .max(10 * 1024 * 1024, 'File size must not exceed the configured maximum.'),
   originalname: z.string().min(1, 'Original filename must not be empty.'),
 });
 
@@ -36,13 +34,14 @@ const uploadFileSchema = z.object({
  * Multer middleware runs before this handler, so `req.file` is populated.
  *
  * Steps:
- *  1. Confirm Multer provided a file (guards against missing field).
+ *  1. Confirm Multer provided a file.
  *  2. Validate file metadata with Zod.
- *  3. Delegate to `uploadService.processUpload` which handles DB + stub processing.
- *  4. Return the ApiResponse envelope.
+ *  3. Persist the Job row with status=pending via uploadService.
+ *  4. Enqueue the jobId for async processing (BullMQ or in-memory).
+ *  5. Return 201 with the job details.
  */
 export async function handleUpload(req: Request, res: Response): Promise<void> {
-  // 1. Guard — Multer sets req.file when a file was received
+  // 1. Guard
   if (!req.file) {
     throw createError(
       400,
@@ -50,7 +49,7 @@ export async function handleUpload(req: Request, res: Response): Promise<void> {
     );
   }
 
-  // 2. Validate file metadata via Zod (belt-and-suspenders on top of Multer's filter)
+  // 2. Validate
   const validation = uploadFileSchema.safeParse({
     mimetype: req.file.mimetype,
     size: req.file.size,
@@ -61,15 +60,18 @@ export async function handleUpload(req: Request, res: Response): Promise<void> {
     throw createError(400, validation.error.errors[0]?.message ?? 'Invalid file.');
   }
 
-  // 3. Process: persist to DB, stub-complete
+  // 3. Persist Job row (status=pending)
   const result = await processUpload(req.file);
 
-  // 4. Respond
+  // 4. Enqueue for async processing — Phase 1 stub removed
+  await enqueueJob(result.jobId);
+
+  // 5. Respond
   const payload: ApiResponse<UploadSuccessData> = {
     success: true,
     data: {
       jobId: result.jobId,
-      status: result.status,
+      status: result.status,   // "pending" — processing is async
       filename: result.filename,
       fileSize: result.fileSize,
       uploadedAt: result.uploadedAt,

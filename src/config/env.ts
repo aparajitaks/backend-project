@@ -30,6 +30,29 @@ const envSchema = z.object({
     .transform(Number)
     .pipe(z.number().int().min(1).max(500))
     .default('10'),
+
+  // ── Phase 2 additions ─────────────────────────────────────────────────────
+  REDIS_URL: z
+    .string()
+    .default('redis://localhost:6379'),
+  BLUR_THRESHOLD: z
+    .string()
+    .regex(/^\d+$/, 'BLUR_THRESHOLD must be a numeric string')
+    .transform(Number)
+    .pipe(z.number().int().min(1))
+    .default('80'),
+  MIN_IMAGE_DIMENSION: z
+    .string()
+    .regex(/^\d+$/, 'MIN_IMAGE_DIMENSION must be a numeric string')
+    .transform(Number)
+    .pipe(z.number().int().min(1))
+    .default('300'),
+  OCR_TIMEOUT_MS: z
+    .string()
+    .regex(/^\d+$/, 'OCR_TIMEOUT_MS must be a numeric string')
+    .transform(Number)
+    .pipe(z.number().int().min(1000))
+    .default('10000'),
 });
 
 /**
@@ -55,8 +78,8 @@ export const env = parseEnv();
 
 // Convenience derived values
 export const isDevelopment = env.NODE_ENV === 'development';
-export const isProduction = env.NODE_ENV === 'production';
-export const isTest = env.NODE_ENV === 'test';
+export const isProduction  = env.NODE_ENV === 'production';
+export const isTest        = env.NODE_ENV === 'test';
 
 /** Maximum file size in bytes, derived from MAX_FILE_SIZE_MB */
 export const MAX_FILE_SIZE_BYTES = env.MAX_FILE_SIZE_MB * 1024 * 1024;
