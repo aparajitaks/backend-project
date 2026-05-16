@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+model Job {
+  id               String     @id @default(cuid())
+  originalFilename String
+  storedFilename   String
+  storedPath       String
+  mimeType         String
+  fileSize         Int
+  status           JobStatus  @default(pending)
+  imageHash        String?
+  failureReason    String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  result           JobResult?
+}
+
+model JobResult {
+  id               String   @id @default(cuid())
+  jobId            String   @unique
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  checks           Json
+  overallPassed    Boolean
+  overallConfidence Float
+  isDuplicate      Boolean  @default(false)
+  duplicateOfJobId String?
+  processedAt      DateTime @default(now())
+}
