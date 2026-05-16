@@ -1,4 +1,5 @@
 import createError from 'http-errors';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db';
 import type {
   JobStatus,
@@ -146,18 +147,19 @@ export const jobService = {
       });
 
       if (result) {
+        const checksJson = result.checks as unknown as Prisma.InputJsonValue;
         await tx.jobResult.upsert({
           where: { jobId: id },
           create: {
             jobId: id,
-            checks: result.checks,
+            checks: checksJson,
             overallPassed: result.overallPassed,
             overallConfidence: result.overallConfidence,
             isDuplicate: result.isDuplicate ?? false,
             duplicateOfJobId: result.duplicateOfJobId ?? null,
           },
           update: {
-            checks: result.checks,
+            checks: checksJson,
             overallPassed: result.overallPassed,
             overallConfidence: result.overallConfidence,
             isDuplicate: result.isDuplicate ?? false,
