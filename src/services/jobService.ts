@@ -189,4 +189,22 @@ export const jobService = {
       },
     });
   },
+
+  /**
+   * Fetches a Job and its associated JobResult in a single query.
+   * Used by the GET /api/jobs/:id/result endpoint.
+   * Throws 404 if the job does not exist.
+   */
+  async getWithResult(id: string) {
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { result: true },
+    });
+
+    if (!job) {
+      throw createError(404, `Job not found: ${id}`);
+    }
+
+    return job;
+  },
 };

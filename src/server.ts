@@ -5,13 +5,15 @@
  *  1. Validate environment (via config/env.ts import side-effect)
  *  2. Ensure the upload directory exists
  *  3. Start the HTTP server
- *  4. Register graceful shutdown handlers for SIGTERM / SIGINT
+ *  4. Start the job processing worker (BullMQ or in-memory fallback)
+ *  5. Register graceful shutdown handlers for SIGTERM / SIGINT
  */
 
 import { env } from './config/env';
 import { disconnectPrisma } from './config/db';
 import { ensureUploadDirExists } from './utils/fileHelpers';
 import { logger } from './middleware/requestLogger';
+import { startWorker } from './queue/index';
 import { app } from './app';
 import http from 'http';
 
@@ -20,7 +22,7 @@ import http from 'http';
 // ---------------------------------------------------------------------------
 
 async function bootstrap(): Promise<void> {
-  // Ensure the upload directory is ready before the server accepts requests
+  // Ensure the upload directory is ready before accepting requests
   try {
     ensureUploadDirExists();
     logger.info({ uploadDir: env.UPLOAD_DIR }, 'Upload directory ready');
@@ -32,26 +34,26 @@ async function bootstrap(): Promise<void> {
   // Create and start the HTTP server
   const server = http.createServer(app);
 
-  server.listen(env.PORT, () => {
-    logger.info(
-      {
-        port: env.PORT,
-        env: env.NODE_ENV,
-        uploadDir: env.UPLOAD_DIR,
-        maxFileSizeMb: env.MAX_FILE_SIZE_MB,
-      },
-      `🚀  Server listening on http://localhost:${env.PORT}`,
-    );
+  await new Promise<void>((resolve) => {
+    server.listen(env.PORT, () => {
+      logger.info(
+        {
+          port: env.PORT,
+          env: env.NODE_ENV,
+          uploadDir: env.UPLOAD_DIR,
+          maxFileSizeMb: env.MAX_FILE_SIZE_MB,
+        },
+        `🚀  Server listening on http://localhost:${env.PORT}`,
+      );
+      resolve();
+    });
   });
 
-  // ── Graceful shutdown ────────────────────────────────────────────────────
+  // Start async job worker AFTER server is listening
+  await startWorker();
 
-  /**
-   * Gracefully stops the server:
-   *  1. Stop accepting new connections.
-   *  2. Disconnect Prisma so the DB connection pool is released.
-   *  3. Exit.
-   */
+  // ── Graceful shutdown ──────────────────────────────────────────────────────
+
   async function shutdown(signal: string): Promise<void> {
     logger.info({ signal }, 'Shutdown signal received — closing server…');
 
@@ -67,7 +69,7 @@ async function bootstrap(): Promise<void> {
       process.exit(0);
     });
 
-    // Force exit after 10 s if graceful shutdown stalls
+    // Force exit after 10s if graceful shutdown stalls
     setTimeout(() => {
       logger.error('Graceful shutdown timed out — forcing exit');
       process.exit(1);
@@ -75,14 +77,12 @@ async function bootstrap(): Promise<void> {
   }
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGINT',  () => void shutdown('SIGINT'));
 
-  // Catch unhandled promise rejections so they don't silently disappear
   process.on('unhandledRejection', (reason) => {
     logger.error({ reason }, 'Unhandled promise rejection');
   });
 
-  // Catch synchronous uncaught exceptions
   process.on('uncaughtException', (err) => {
     logger.fatal({ err }, 'Uncaught exception — shutting down');
     void shutdown('uncaughtException');

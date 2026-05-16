@@ -8,14 +8,15 @@ const router = Router();
 /**
  * Mounts all sub-routers under /api.
  *
- * Final URL layout:
+ * URL layout:
  *   POST   /api/upload
  *   GET    /api/jobs
  *   GET    /api/jobs/:id/status
+ *   GET    /api/jobs/:id/result   ← Phase 2
  *   GET    /api/health
  */
 router.use('/upload', uploadRouter);
-router.use('/jobs', jobsRouter);
+router.use('/jobs',   jobsRouter);
 router.use('/health', healthRouter);
 
 export default router;

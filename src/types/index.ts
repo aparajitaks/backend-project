@@ -67,6 +67,18 @@ export interface JobListQuery {
   offset: number;
 }
 
+export interface JobResultData {
+  jobId: string;
+  status: string;
+  imageHash: string | null;
+  overallPassed: boolean;
+  overallConfidence: number;
+  isDuplicate: boolean;
+  duplicateOfJobId: string | null;
+  checks: unknown;
+  processedAt: Date;
+}
+
 // ---------------------------------------------------------------------------
 // Health domain
 // ---------------------------------------------------------------------------

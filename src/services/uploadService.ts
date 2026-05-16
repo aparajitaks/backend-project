@@ -10,7 +10,6 @@ import {
   buildStoredFile,
   resolveUploadDir,
 } from '../utils/fileHelpers';
-import { jobService } from './jobService';
 import type { StoredFile, UploadSuccessData } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -27,24 +26,16 @@ const ALLOWED_MIME_TYPES = new Set([
 // Multer configuration
 // ---------------------------------------------------------------------------
 
-/**
- * Multer disk storage engine.
- * Files are saved to UPLOAD_DIR under a collision-resistant filename.
- */
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
     ensureUploadDirExists();
     cb(null, resolveUploadDir());
   },
   filename(_req, file, cb) {
-    const storedFilename = buildStoredFilename(file.mimetype);
-    cb(null, storedFilename);
+    cb(null, buildStoredFilename(file.mimetype));
   },
 });
 
-/**
- * MIME-type filter — rejects files that are not jpeg, png, or webp.
- */
 const fileFilter = (
   _req: Request,
   file: Express.Multer.File,
@@ -62,14 +53,10 @@ const fileFilter = (
   }
 };
 
-/** Configured Multer instance — exported so the route can apply it. */
 export const upload = multer({
   storage,
   fileFilter,
-  limits: {
-    fileSize: MAX_FILE_SIZE_BYTES,
-    files: 1,
-  },
+  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
 });
 
 // ---------------------------------------------------------------------------
@@ -81,17 +68,12 @@ export interface UploadResult extends UploadSuccessData {
 }
 
 /**
- * Persists the uploaded file record to the database and runs the stub
- * processing step (marks the job completed immediately — Phase 2 replaces
- * this with a real async worker).
- *
- * @param file - The `Express.Multer.File` object provided by Multer.
- * @returns     An `UploadResult` containing all fields needed by the response.
+ * Saves the uploaded file descriptor to the database with status=pending.
+ * The caller (uploadController) is responsible for enqueueing async processing.
  */
 export async function processUpload(
   file: Express.Multer.File,
 ): Promise<UploadResult> {
-  // 1. Build the stored-file descriptor
   const storedFile: StoredFile = buildStoredFile(
     file.originalname,
     file.filename,
@@ -99,47 +81,35 @@ export async function processUpload(
     file.size,
   );
 
-  // 2. Verify the file actually landed on disk before touching the database
   if (!fs.existsSync(storedFile.storedPath)) {
     throw createError(500, 'File was not saved to disk correctly.');
   }
 
-  // 3. Insert the Job row with status = pending
   const job = await prisma.job.create({
     data: {
       originalFilename: storedFile.originalFilename,
-      storedFilename: storedFile.storedFilename,
-      storedPath: storedFile.storedPath,
-      mimeType: storedFile.mimeType,
-      fileSize: storedFile.fileSize,
-      status: 'pending',
+      storedFilename:   storedFile.storedFilename,
+      storedPath:       storedFile.storedPath,
+      mimeType:         storedFile.mimeType,
+      fileSize:         storedFile.fileSize,
+      status:           'pending',
     },
   });
 
-  // 4. Phase-1 stub: immediately mark the job as completed.
-  //    Phase 2 will replace this with a BullMQ enqueue call.
-  await jobService.markCompleted(job.id);
-
   return {
-    jobId: job.id,
-    status: 'completed',
-    filename: storedFile.storedFilename,
-    fileSize: storedFile.fileSize,
+    jobId:      job.id,
+    status:     'pending',
+    filename:   storedFile.storedFilename,
+    fileSize:   storedFile.fileSize,
     uploadedAt: job.createdAt.toISOString(),
     storedPath: storedFile.storedPath,
   };
 }
 
-/**
- * Safely removes a file from disk.  Used as a cleanup step when the DB
- * insert fails after Multer has already written the file.
- */
 export function cleanupFile(filePath: string): void {
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch {
-    // Non-fatal; swallowed intentionally to avoid masking the primary error
+    // Non-fatal
   }
 }
