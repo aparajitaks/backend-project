@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { upload } from '../services/uploadService';
 import { handleUpload } from '../controllers/uploadController';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { uploadRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -14,6 +15,7 @@ const router = Router();
  */
 router.post(
   '/',
+  uploadRateLimiter,
   upload.single('image'),
   asyncHandler(handleUpload),
 );

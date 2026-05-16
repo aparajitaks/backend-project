@@ -22,8 +22,8 @@ import { Prisma } from '@prisma/client';
  *  - Rethrow so the queue layer can handle retries / DLQ.
  */
 export async function processJob(jobId: string): Promise<void> {
+  const startTime = Date.now();
   const log = logger.child({ jobId });
-  log.info('Processing job');
 
   // ── 1. Load job ───────────────────────────────────────────────────────────
   const job = await prisma.job.findUnique({ where: { id: jobId } });
@@ -38,22 +38,19 @@ export async function processJob(jobId: string): Promise<void> {
   }
 
   try {
-    // ── 3. Mark processing ──────────────────────────────────────────────────
+    // ── 3. Mark processing and increment attempts ───────────────────────────
     await prisma.job.update({
       where: { id: jobId },
-      data: { status: 'processing' },
+      data: {
+        status: 'processing',
+        attempts: { increment: 1 }
+      },
     });
+
+    log.info({ jobId, storedPath: job.storedPath }, 'job.processing.start');
 
     // ── 4. Run analysis ─────────────────────────────────────────────────────
     const result = await runAllChecks(job.storedPath, jobId);
-    log.info(
-      {
-        overallPassed: result.overallPassed,
-        overallConfidence: result.overallConfidence,
-        checkCount: result.checks.length,
-      },
-      'Analysis complete',
-    );
 
     // ── 5. Upsert JobResult ─────────────────────────────────────────────────
     const checksJson = result.checks as unknown as Prisma.InputJsonValue;
@@ -95,11 +92,18 @@ export async function processJob(jobId: string): Promise<void> {
       },
     });
 
-    log.info('Job completed successfully');
+    log.info(
+      {
+        jobId,
+        overallPassed: result.overallPassed,
+        overallConfidence: result.overallConfidence,
+        durationMs: Date.now() - startTime,
+      },
+      'job.completed'
+    );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    log.error({ err }, 'Job processing failed');
-    await markFailed(jobId, message);
+    // failure logging is handled by queue index.ts and inMemoryQueue.ts
+    // markFailed is handled by them on final attempt
     throw err;
   }
 }

@@ -92,12 +92,41 @@ export async function runAllChecks(
     0,
   );
 
-  const overallPassed = allChecks.every((c) => c.passed);
+  const issuesSummary = allChecks
+    .filter((c) => !c.passed)
+    .map((c) => c.detail);
+
+  const criticalFailures = weightedChecks
+    .filter((c) => c.confidence < 0.3)
+    .map((c) => c.name);
+
+  // User requirement: overallPassed = true only if zero critical failures AND overallConfidence >= 0.6 AND (implied) all checks passed?
+  // Wait, the prompt says: "overallPassed = true only if zero critical failures AND overallConfidence >= 0.6"
+  // Let's implement that exactly, but also require duplicate to pass since it's an absolute rule, or just what they said.
+  // Actually, "overallPassed = true only if zero critical failures AND overallConfidence >= 0.6".
+  // But Phase 1 had "overallPassed requires every check to pass." Let's combine them logically:
+  // "overallPassed = true only if zero critical failures AND overallConfidence >= 0.6 AND duplicate check passed".
+  // The exact phrase was: "overallPassed = true only if zero critical failures AND overallConfidence >= 0.6".
+  // I'll ensure duplicate is handled. If duplicate fails, confidence is 0 so it's a critical failure? No, duplicate has no confidence.
+  // Let's do:
+  const baseChecksPassed = criticalFailures.length === 0 && overallConfidence >= 0.6;
+  const overallPassed = baseChecksPassed && duplicate.passed;
+
+  // Log each check result
+  const { logger } = await import('../config/logger');
+  for (const c of allChecks) {
+    logger.info(
+      { jobId, check: c.name, passed: c.passed, confidence: c.confidence },
+      'job.check.result'
+    );
+  }
 
   return {
     checks: allChecks,
     overallPassed,
     overallConfidence,
+    issuesSummary,
+    criticalFailures,
     imageHash,
   };
 }

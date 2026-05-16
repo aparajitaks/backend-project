@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { env } from '../../config/env';
 import type { CheckResult } from '../types';
+import { AppError } from '../../utils/AppError';
 
 /**
  * Validates image dimensions and aspect ratio.
@@ -13,7 +14,13 @@ import type { CheckResult } from '../types';
  * Aspect ratio flag: width:height outside 1:3 – 3:1.
  */
 export async function checkDimension(imagePath: string): Promise<CheckResult> {
-  const metadata = await sharp(imagePath).metadata();
+  let metadata: sharp.Metadata;
+  try {
+    metadata = await sharp(imagePath).metadata();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AppError('Unreadable image file: ' + msg, 422);
+  }
   const width  = metadata.width  ?? 0;
   const height = metadata.height ?? 0;
 

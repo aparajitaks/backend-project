@@ -22,6 +22,10 @@ export interface AnalysisResult {
   overallPassed: boolean;
   /** Weighted average confidence across all weighted checks. */
   overallConfidence: number;
+  /** Human-readable list of what failed. */
+  issuesSummary: string[];
+  /** Checks where confidence < 0.3. */
+  criticalFailures: string[];
   /** SHA-256 hex digest of the raw file bytes. */
   imageHash: string;
 }
