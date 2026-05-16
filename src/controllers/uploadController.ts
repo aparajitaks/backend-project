@@ -49,6 +49,13 @@ export async function handleUpload(req: Request, res: Response): Promise<void> {
     );
   }
 
+  if (req.file.size === 0) {
+    // Need to clean it up since Multer saved an empty file
+    const { cleanupFile } = await import('../services/uploadService');
+    cleanupFile(req.file.path);
+    throw createError(400, 'File cannot be empty (0 bytes).');
+  }
+
   // 2. Validate
   const validation = uploadFileSchema.safeParse({
     mimetype: req.file.mimetype,

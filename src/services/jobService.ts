@@ -57,14 +57,14 @@ export const jobService = {
    * Returns the page of results plus the total count for the filter.
    */
   async list(query: JobListQuery): Promise<JobListData> {
-    const { status, limit, offset } = query;
+    const { status, limit, offset, sortBy, sortOrder } = query;
 
     const where = status ? { status: status as JobStatus } : {};
 
     const [jobs, total] = await Promise.all([
       prisma.job.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         take: limit,
         skip: offset,
         select: {
@@ -92,11 +92,16 @@ export const jobService = {
       updatedAt: j.updatedAt,
     }));
 
+    const hasMore = offset + limit < total;
+    const nextOffset = hasMore ? offset + limit : null;
+
     return {
       jobs: mapped,
       total,
       limit,
       offset,
+      hasMore,
+      nextOffset,
     };
   },
 
@@ -206,5 +211,39 @@ export const jobService = {
     }
 
     return job;
+  },
+
+  /**
+   * Fetches failure details for a job.
+   * Throws 404 if not found.
+   * Throws 400 if the job is not in 'failed' status.
+   */
+  async getFailureDetails(id: string) {
+    const job = await prisma.job.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        failureReason: true,
+        updatedAt: true,
+        attempts: true,
+      },
+    });
+
+    if (!job) {
+      throw createError(404, `Job not found: ${id}`);
+    }
+
+    if (job.status !== 'failed') {
+      throw createError(400, 'Job has not failed');
+    }
+
+    return {
+      jobId: job.id,
+      status: job.status,
+      failureReason: job.failureReason,
+      failedAt: job.updatedAt,
+      attempts: job.attempts,
+    };
   },
 };

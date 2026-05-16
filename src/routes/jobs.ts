@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getJobStatus, listJobs, getResult } from '../controllers/jobController';
+import { getJobStatus, listJobs, getResult, getJobFailure } from '../controllers/jobController';
 import { asyncHandler } from '../middleware/asyncHandler';
 
 const router = Router();
@@ -15,6 +15,12 @@ router.get('/', asyncHandler(listJobs));
  * Fetch the current status of a specific job.
  */
 router.get('/:id/status', asyncHandler(getJobStatus));
+
+/**
+ * GET /api/jobs/:id/failure
+ * Fetch failure details of a specific failed job.
+ */
+router.get('/:id/failure', asyncHandler(getJobFailure));
 
 /**
  * GET /api/jobs/:id/result

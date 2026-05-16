@@ -102,6 +102,16 @@ export async function processJob(jobId: string): Promise<void> {
       'job.completed'
     );
   } catch (err: unknown) {
+    const isUnreadable = (err as any)?.statusCode === 422;
+    if (isUnreadable) {
+      await markFailed(jobId, 'Unreadable image file');
+      // If using bullmq, we should ideally throw an UnrecoverableError, 
+      // but throwing any error will bubble up. We will let the queue handle it 
+      // or we can just return so it doesn't retry? 
+      // The instructions say "immediately fail the job". By marking it failed and returning,
+      // the queue thinks it succeeded and won't retry.
+      return;
+    }
     // failure logging is handled by queue index.ts and inMemoryQueue.ts
     // markFailed is handled by them on final attempt
     throw err;

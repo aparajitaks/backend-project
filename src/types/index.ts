@@ -59,12 +59,16 @@ export interface JobListData {
   total: number;
   limit: number;
   offset: number;
+  hasMore: boolean;
+  nextOffset: number | null;
 }
 
 export interface JobListQuery {
   status?: JobStatus;
   limit: number;
   offset: number;
+  sortBy: 'createdAt' | 'updatedAt';
+  sortOrder: 'asc' | 'desc';
 }
 
 export interface JobResultData {

@@ -32,6 +32,8 @@ const listQuerySchema = z.object({
     .pipe(z.number().int().min(0))
     .optional()
     .default('0'),
+  sortBy: z.enum(['createdAt', 'updatedAt']).optional().default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
 const idParamSchema = z.object({
@@ -64,18 +66,42 @@ export async function listJobs(req: Request, res: Response): Promise<void> {
     throw createError(400, queryParsed.error.errors[0]?.message ?? 'Invalid query parameters.');
   }
 
-  const { status, limit, offset } = queryParsed.data;
+  const { status, limit, offset, sortBy, sortOrder } = queryParsed.data;
   const result: JobListData = await jobService.list({
     status: status as JobStatus | undefined,
     limit,
     offset,
+    sortBy,
+    sortOrder,
   });
 
   const payload: ApiResponse<JobListData> = {
     success: true,
     data: result,
-    meta: { limit, offset, total: result.total },
+    meta: { 
+      limit, 
+      offset, 
+      total: result.total,
+      hasMore: result.hasMore,
+      nextOffset: result.nextOffset
+    },
   };
+  res.status(200).json(payload);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/jobs/:id/failure
+// ---------------------------------------------------------------------------
+
+export async function getJobFailure(req: Request, res: Response): Promise<void> {
+  const paramParsed = idParamSchema.safeParse(req.params);
+  if (!paramParsed.success) {
+    throw createError(400, paramParsed.error.errors[0]?.message ?? 'Invalid job ID.');
+  }
+
+  const failureData = await jobService.getFailureDetails(paramParsed.data.id);
+
+  const payload: ApiResponse<typeof failureData> = { success: true, data: failureData };
   res.status(200).json(payload);
 }
 
