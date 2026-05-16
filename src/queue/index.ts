@@ -5,28 +5,24 @@ import { createBullQueue, getBullQueue, BULL_QUEUE_NAME } from './bullQueue';
 import type { ImageJobData } from './bullQueue';
 import { inMemoryQueue } from './inMemoryQueue';
 import { processJob } from './processor';
-import { logger } from '../middleware/requestLogger';
+import { logger } from '../config/logger';
+import { jobService } from '../services/jobService';
 
 // ---------------------------------------------------------------------------
 // enqueueJob
 // ---------------------------------------------------------------------------
 
-/**
- * Enqueues a job for async image processing.
- * Automatically picks BullMQ (Redis) or the in-memory queue depending on
- * what was initialised by `startWorker()`.
- */
 export async function enqueueJob(jobId: string): Promise<void> {
   const bullQueue = getBullQueue();
 
   if (bullQueue) {
     await bullQueue.add('process-image', { jobId } satisfies ImageJobData, {
-      jobId, // use the DB id as BullMQ job id for deduplication
+      jobId,
     });
-    logger.debug({ jobId }, 'Job enqueued in BullMQ');
+    logger.info({ jobId, queue: 'bullmq' }, 'job.enqueued');
   } else {
     inMemoryQueue.enqueue(jobId);
-    logger.debug({ jobId }, 'Job enqueued in in-memory queue');
+    logger.info({ jobId, queue: 'memory' }, 'job.enqueued');
   }
 }
 
@@ -34,22 +30,12 @@ export async function enqueueJob(jobId: string): Promise<void> {
 // startWorker
 // ---------------------------------------------------------------------------
 
-/**
- * Initialises the processing backend:
- *  - Tries to connect to Redis (3s timeout).
- *  - On success: creates a BullMQ Queue + Worker with concurrency 5.
- *  - On failure: attaches a listener to the in-memory EventEmitter queue.
- *
- * Call once from server.ts after `server.listen()`.
- */
 export async function startWorker(): Promise<void> {
   const redis: Redis | null = await initRedisClient();
 
   if (redis) {
-    // ── BullMQ path ──────────────────────────────────────────────────────────
     createBullQueue(redis);
 
-    // BullMQ Worker needs its own dedicated connection — create a duplicate
     const workerRedis = redis.duplicate();
 
     const worker = new Worker<ImageJobData>(
@@ -64,14 +50,30 @@ export async function startWorker(): Promise<void> {
     );
 
     worker.on('completed', (job) => {
-      logger.info({ jobId: job.data.jobId, bullJobId: job.id }, 'BullMQ job completed');
+      // job.completed is logged inside processJob now (where duration, confidence, etc. are known)
+      // We can just log worker success here if needed, but not duplicating job.completed
     });
 
-    worker.on('failed', (job, err) => {
-      logger.error(
-        { jobId: job?.data.jobId, bullJobId: job?.id, err: err.message },
-        'BullMQ job failed',
-      );
+    worker.on('failed', async (job, err) => {
+      if (!job) return;
+      const attempt = job.attemptsMade;
+      const maxAttempts = job.opts.attempts ?? 3;
+      
+      if (attempt < maxAttempts) {
+        // Not final failure
+        const delay = Math.pow(2, attempt - 1) * 1000; // rough estimation of backoff for log
+        logger.error(
+          { jobId: job.data.jobId, attempt, error: err.message, nextRetryIn: delay },
+          'job.failed'
+        );
+      } else {
+        // Final failure
+        logger.error(
+          { jobId: job.data.jobId, attempt, error: err.message, failureReason: 'Max attempts exhausted' },
+          'job.failed'
+        );
+        await jobService.markFailed(job.data.jobId, err.message).catch(() => {});
+      }
     });
 
     worker.on('error', (err) => {
@@ -80,16 +82,10 @@ export async function startWorker(): Promise<void> {
 
     logger.info({ queue: BULL_QUEUE_NAME, concurrency: 5 }, 'BullMQ worker started');
   } else {
-    // ── In-memory path ───────────────────────────────────────────────────────
-    inMemoryQueue.on('process', (jobId: string) => {
-      processJob(jobId).catch((err: unknown) => {
-        logger.error(
-          { jobId, err: err instanceof Error ? err.message : String(err) },
-          'In-memory queue: job failed',
-        );
-      });
-    });
-
+    // In-memory path listener moved to inMemoryQueue itself for retry logic encapsulation,
+    // or we can implement it here. Let's do it in inMemoryQueue and just call start listener.
+    inMemoryQueue.startListener();
+    
     logger.warn(
       'Running with in-memory queue — jobs will be lost on restart. Configure REDIS_URL for production.',
     );

@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
 import type Redis from 'ioredis';
-import { logger } from '../middleware/requestLogger';
+import { logger } from '../config/logger';
 
 export const BULL_QUEUE_NAME = 'image-processing';
 
@@ -21,7 +21,7 @@ export function createBullQueue(redis: Redis | null): Queue<ImageJobData> | null
     connection: redis,
     defaultJobOptions: {
       attempts: 3,
-      backoff: { type: 'exponential', delay: 2000 },
+      backoff: { type: 'exponential', delay: 1000 },
       removeOnComplete: { count: 500 },
       removeOnFail: { count: 200 },
     },

@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 import { env } from '../config/env';
-import { logger } from '../middleware/requestLogger';
+import { logger } from '../config/logger';
 
 const CONNECT_TIMEOUT_MS = 3000;
 
