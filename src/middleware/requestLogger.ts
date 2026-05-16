@@ -1,26 +1,7 @@
-import pino from 'pino';
 import pinoHttp from 'pino-http';
-import { env } from '../config/env';
+import { logger } from '../config/logger';
 
-/**
- * Shared Pino logger instance.
- *
- * In development, output is prettified for readability.
- * In production, JSON lines are emitted at `info` level for structured log ingestion.
- */
-export const logger = pino({
-  level: env.NODE_ENV === 'production' ? 'info' : 'debug',
-  ...(env.NODE_ENV !== 'production' && {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-      },
-    },
-  }),
-});
+export { logger };
 
 /**
  * Pino HTTP middleware.
