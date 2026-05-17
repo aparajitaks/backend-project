@@ -1,0 +1,61 @@
+services:
+  # API Service
+  - type: web
+    name: vehicle-pipeline-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: ./scripts/start.sh
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vehicle-pipeline-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false  # paste Upstash URL manually in dashboard
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: MAX_FILE_SIZE_MB
+        value: 10
+      - key: BLUR_THRESHOLD
+        value: 80
+      - key: MIN_IMAGE_DIMENSION
+        value: 300
+      - key: OCR_TIMEOUT_MS
+        value: 10000
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 10
+
+  # Worker Service
+  - type: worker
+    name: vehicle-pipeline-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node dist/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vehicle-pipeline-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: BLUR_THRESHOLD
+        value: 80
+      - key: MIN_IMAGE_DIMENSION
+        value: 300
+      - key: OCR_TIMEOUT_MS
+        value: 10000
+
+databases:
+  - name: vehicle-pipeline-db
+    databaseName: media_pipeline
+    plan: free

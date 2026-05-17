@@ -134,6 +134,32 @@ docker compose down -v
 
 ---
 
+## Deployed API
+
+Live URL: https://vehicle-pipeline-api.onrender.com
+
+> Note: Free tier spins down after 15min inactivity.
+> First request after idle may take ~30 seconds (cold start).
+
+## Deploying to Render
+
+This project includes a `render.yaml` Blueprint for one-click deployment.
+
+Prerequisites:
+- Render account (free) — https://render.com
+- Upstash account (free Redis) — https://upstash.com
+
+Steps:
+1. Fork or clone this repo to your GitHub
+2. Go to Render Dashboard → New → Blueprint
+3. Connect this repo — Render auto-reads render.yaml
+4. Add REDIS_URL from Upstash to both services in Render dashboard
+5. Deploy — API will be live in ~5 minutes
+
+See full deployment guide in [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+---
+
 ## 8. Running Tests
 
 We maintain an extremely stable test harness with high test coverage:
