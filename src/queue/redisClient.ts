@@ -51,3 +51,22 @@ export async function initRedisClient(): Promise<Redis | null> {
 export function getRedisClient(): Redis | null {
   return _client;
 }
+
+export async function closeRedisClient(): Promise<void> {
+  if (_client) {
+    _client.disconnect();
+    _client = null;
+  }
+}
+
+export async function closeRedis(): Promise<void> {
+  try {
+    if (_client && _client.status === 'ready') {
+      await _client.quit();
+    }
+  } catch (err) {
+    // catch silently
+  } finally {
+    _client = null;
+  }
+}

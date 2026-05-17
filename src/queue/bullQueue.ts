@@ -35,3 +35,10 @@ export function createBullQueue(redis: Redis | null): Queue<ImageJobData> | null
 export function getBullQueue(): Queue<ImageJobData> | null {
   return _queue;
 }
+
+export async function closeBullQueue(): Promise<void> {
+  if (_queue) {
+    await _queue.close();
+    _queue = null;
+  }
+}

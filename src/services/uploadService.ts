@@ -85,23 +85,8 @@ export async function processUpload(
     throw createError(500, 'File was not saved to disk correctly.');
   }
 
-  // ── Double check MIME type using Sharp ───────────────────────────────────
-  try {
-    const sharp = (await import('sharp')).default;
-    const metadata = await sharp(storedFile.storedPath).metadata();
-    const format = metadata.format;
-    const allowedFormats = ['jpeg', 'png', 'webp'];
-    if (!format || !allowedFormats.includes(format)) {
-      cleanupFile(storedFile.storedPath);
-      throw createError(400, `Invalid image format detected by sharp: ${format}`);
-    }
-  } catch (err) {
-    cleanupFile(storedFile.storedPath);
-    const msg = err instanceof Error ? err.message : String(err);
-    // If it's already a 400 from our logic above, rethrow it
-    if ((err as any).status === 400) throw err;
-    throw createError(400, 'Corrupted or unreadable image file: ' + msg);
-  }
+  // Sharp validation is deferred to the asynchronous worker 
+  // so that corrupted files are accepted initially and failed gracefully during processing.
 
   const job = await prisma.job.create({
     data: {

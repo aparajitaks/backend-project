@@ -54,6 +54,8 @@ export async function waitForStatus(jobId: string, targetStatus: string, timeout
     }
     
     if (res?.status === 'failed' && targetStatus !== 'failed') {
+      const fullJob = await testPrisma.job.findUnique({ where: { id: jobId } });
+      console.error('JOB FAILED IN DB. FULL RECORD:', fullJob);
       throw new Error(`Job failed unexpectedly: ${jobId}`);
     }
 

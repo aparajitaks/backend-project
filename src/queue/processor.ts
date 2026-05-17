@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { prisma } from '../config/db';
 import { runAllChecks } from '../analysis/runner';
-import { logger } from '../middleware/requestLogger';
+import { logger } from '../config/logger';
 import type { CheckResult } from '../analysis/types';
 import { Prisma } from '@prisma/client';
 
@@ -123,6 +123,7 @@ export async function processJob(jobId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function markFailed(jobId: string, reason: string): Promise<void> {
+  logger.error({ jobId, reason }, 'job.marking.failed');
   try {
     await prisma.job.update({
       where: { id: jobId },

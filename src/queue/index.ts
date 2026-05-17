@@ -12,6 +12,8 @@ import { jobService } from '../services/jobService';
 // enqueueJob
 // ---------------------------------------------------------------------------
 
+let activeWorker: Worker | null = null;
+
 export async function enqueueJob(jobId: string): Promise<void> {
   const bullQueue = getBullQueue();
 
@@ -48,6 +50,7 @@ export async function startWorker(): Promise<void> {
         concurrency: 5,
       },
     );
+    activeWorker = worker;
 
     worker.on('completed', (job) => {
       // job.completed is logged inside processJob now (where duration, confidence, etc. are known)
@@ -59,6 +62,8 @@ export async function startWorker(): Promise<void> {
       const attempt = job.attemptsMade;
       const maxAttempts = job.opts.attempts ?? 3;
       
+      logger.error({ error: err.message }, 'BullMQ worker job failed');
+
       if (attempt < maxAttempts) {
         // Not final failure
         const delay = Math.pow(2, attempt - 1) * 1000; // rough estimation of backoff for log
@@ -91,3 +96,17 @@ export async function startWorker(): Promise<void> {
     );
   }
 }
+
+export async function closeWorker(): Promise<void> {
+  if (activeWorker) {
+    await activeWorker.close();
+    activeWorker = null;
+    logger.info('BullMQ worker closed');
+  }
+}
+
+export async function closeQueue(): Promise<void> {
+  const { closeBullQueue } = await import('./bullQueue');
+  await closeBullQueue();
+}
+

@@ -2,11 +2,18 @@ import request from 'supertest';
 import { app } from '../../app';
 import { cleanDb, waitForStatus } from '../setup/testHelpers';
 import { createCorruptedFile } from '../fixtures/corruptedFile';
-import { startWorker } from '../../queue/index';
+import { startWorker, closeWorker, closeQueue } from '../../queue/index';
+import { closeRedis } from '../../queue/redisClient';
 
 describe('Failure Handling E2E Flow', () => {
   beforeAll(async () => {
     await startWorker();
+  });
+
+  afterAll(async () => {
+    await closeWorker();
+    await closeQueue();
+    await closeRedis();
   });
 
   beforeEach(async () => {

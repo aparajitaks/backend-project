@@ -5,6 +5,7 @@ import { checkScreenshot }      from './checks/screenshotDetection';
 import { checkNumberPlate }     from './checks/numberPlateOCR';
 import { checkDuplicate }       from './checks/duplicateDetection';
 import type { CheckResult, AnalysisResult } from './types';
+import { logger }               from '../config/logger';
 
 // ---------------------------------------------------------------------------
 // Weighted confidence weights (must sum to 1.0)
@@ -57,6 +58,14 @@ export async function runAllChecks(
       checkDimension(imagePath),
       checkScreenshot(imagePath),
     ]);
+
+  // If any check failed due to an unreadable/corrupt image (statusCode 422),
+  // we must abort immediately and let the worker mark the job failed.
+  for (const r of [blurSettled, brightnessSettled, dimensionSettled, screenshotSettled]) {
+    if (r.status === 'rejected' && (r.reason as any)?.statusCode === 422) {
+      throw r.reason;
+    }
+  }
 
   const blur       = settle(blurSettled,       'blurDetection');
   const brightness = settle(brightnessSettled, 'brightnessCheck');
@@ -113,7 +122,6 @@ export async function runAllChecks(
   const overallPassed = baseChecksPassed && duplicate.passed;
 
   // Log each check result
-  const { logger } = await import('../config/logger');
   for (const c of allChecks) {
     logger.info(
       { jobId, check: c.name, passed: c.passed, confidence: c.confidence },

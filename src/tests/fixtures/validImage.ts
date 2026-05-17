@@ -16,7 +16,7 @@ export async function createValidImage(): Promise<Buffer> {
     .composite([
       {
         input: Buffer.from(
-          '<svg><text x="50" y="200" font-family="Arial" font-size="60" fill="white">SHARP EDGES</text></svg>'
+          '<svg width="400" height="400"><text x="50" y="200" font-family="Arial" font-size="60" fill="white">SHARP EDGES</text></svg>'
         ),
         top: 0,
         left: 0,

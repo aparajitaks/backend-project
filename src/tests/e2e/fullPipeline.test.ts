@@ -2,12 +2,19 @@ import request from 'supertest';
 import { app } from '../../app';
 import { cleanDb, waitForStatus } from '../setup/testHelpers';
 import { createValidImage } from '../fixtures/validImage';
-import { startWorker } from '../../queue/index';
+import { startWorker, closeWorker, closeQueue } from '../../queue/index';
+import { closeRedis } from '../../queue/redisClient';
 
 describe('Full Pipeline E2E Flow', () => {
   beforeAll(async () => {
     // Start the worker to process jobs during the test
     await startWorker();
+  });
+
+  afterAll(async () => {
+    await closeWorker();
+    await closeQueue();
+    await closeRedis();
   });
 
   beforeEach(async () => {

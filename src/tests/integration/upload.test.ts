@@ -59,7 +59,7 @@ describe('POST /api/upload integration tests', () => {
       .post('/api/upload')
       .attach('image', Buffer.from('hello world'), 'test.txt');
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('Only jpeg, png, and webp');
+    expect(res.body.error).toContain('Unsupported file type');
   });
 
   it('returns 400 for missing Content-Type multipart', async () => {

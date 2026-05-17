@@ -15,17 +15,19 @@ export default async function globalSetup() {
   }
   process.env['DATABASE_URL'] = process.env['TEST_DATABASE_URL'];
 
-  // 3. Push schema to test database (no migrations directory required)
+  // 3. Run prisma db push to ensure schema is pushed to test DB
   try {
     console.log('Pushing schema to test database...');
     const env = { 
       ...process.env, 
-      PATH: `${process.env['PATH']}:/usr/local/bin:/opt/homebrew/bin`,
-      DATABASE_URL: process.env['TEST_DATABASE_URL'],
+      PATH: `${process.env['PATH']}:/usr/local/bin:/opt/homebrew/bin` 
     };
-    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'inherit', env });
+    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit', env });
   } catch (error) {
-    console.warn('⚠️  Schema push failed. Integration/E2E tests will fail if the DB is unreachable.');
+    console.warn('⚠️  Migration failed. Integration/E2E tests will fail if the DB is unreachable.');
+    
+    // If we're only running unit tests, we can ignore this. 
+    // Otherwise, we throw to prevent false positives in integration tests.
     const isUnitOnly = process.argv.some(arg => arg.includes('src/tests/unit'));
     if (!isUnitOnly) {
       throw error;
