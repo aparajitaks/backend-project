@@ -1,8 +1,27 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Environment files
+.env
+.env.test
+
+# Upload directories
 uploads/
-*.env
-!.env.example
+uploads-test/
+
+# Logs
+logs/
 *.log
+
+# OS
 .DS_Store
-*.tsbuildinfo
+Thumbs.db
+
+# Jest
+coverage/
+
+# Prisma
+prisma/migrations/dev.db
