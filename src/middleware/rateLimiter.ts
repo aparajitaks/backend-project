@@ -6,8 +6,8 @@ export const uploadRateLimiter = rateLimit({
   standardHeaders: false, // Disable the `RateLimit-*` headers
   legacyHeaders: true, // Enable the `X-RateLimit-*` headers
   handler: (req, res) => {
-    // Math.ceil because resetTime might be missing or fractional
-    const resetTime = req.rateLimit.resetTime;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resetTime = (req as any).rateLimit?.resetTime as Date | undefined;
     const retryAfter = resetTime ? Math.ceil((resetTime.getTime() - Date.now()) / 1000) : 60;
     
     res.status(429).json({
