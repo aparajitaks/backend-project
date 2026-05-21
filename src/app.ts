@@ -29,6 +29,25 @@ function createApp(): Application {
   // ── 3. API routes ────────────────────────────────────────────────────────
   app.use('/api', apiRouter);
 
+  // ── 3a. Root route ───────────────────────────────────────────────────────
+  app.get('/', (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      message: 'Image Processing Pipeline API Running 🚀',
+      environment: process.env['NODE_ENV'] || 'development',
+    });
+  });
+
+  // ── 3b. Health check route ───────────────────────────────────────────────
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      status: 'healthy',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ── 4. 404 fallback ──────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
     const payload: ApiResponse = {
